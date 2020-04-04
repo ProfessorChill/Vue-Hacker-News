@@ -1,34 +1,29 @@
 <template>
   <div class="container news-list">
     <div class="news-list-nav">
-      <a :href="this.page - 1"
+      <a v-on:click="getPage(page - 1)" href="#"
          v-if="this.page - 1 > 0">&lt; prev</a>
       <a class="disabled" v-if="this.page - 1 < 1">&lt; prev</a>
       <span>{{ this.page }} / {{ Math.ceil(this.topPostIds.length / this.postsLimit) }}</span>
-      <a :href="this.page + 1">more &gt;</a>
+      <a v-on:click="getPage(page + 1)" href="#">more &gt;</a>
     </div>
 
     <ul>
-      <li v-for="post in posts" class="news-item" :key="post.id">
-        <span class="score">{{ post.score }}</span>
-        <span class="title">
-          <a :href="post.url" target="_blank">{{ post.title }}</a>
-        </span>
-        <br/>
-        <span class="meta">
-          <span class="by">
-            by
-            <a class="" :href="'/user/' + post.by">{{ post.by }}</a>
-             | {{ post.descendants }} comments
-          </span>
-        </span>
-      </li>
+      <Post v-for="post in posts"
+        :score="post.score"
+        :title="post.title"
+        :url="post.url"
+        :by="post.by"
+        :descendants="post.descendants"
+        :key="post.id" />
     </ul>
     <button @click="reload">Reset</button><br/>
   </div>
 </template>
 
 <script>
+import Post from './Post.vue';
+
 const baseURL = 'https://hacker-news.firebaseio.com';
 const postsLimit = 15;
 
@@ -41,6 +36,9 @@ export default {
       postsLimit,
     };
   },
+  components: {
+    Post,
+  },
   created() {
     if (this.topPosts.length < postsLimit) {
       this.$store.clearAll();
@@ -52,15 +50,16 @@ export default {
   },
   methods: {
     fetchPosts() {
-      const uri = `${baseURL}/v0/topstories.json?print=pretty`;
+      const uri = `${baseURL}/v0/topstories.json`;
 
       this.axios.get(uri).then((response) => {
         for (let i = 0; i < response.data.length; i += 1) {
           this.topPostIds.push(response.data[i]);
         }
+        this.postIds = this.topPostIds;
 
         for (let i = 0; i < postsLimit; i += 1) {
-          const postUri = `${baseURL}/v0/item/${response.data[i]}.json?print=pretty`;
+          const postUri = `${baseURL}/v0/item/${response.data[i]}.json`;
 
           this.axios.get(postUri).then((postRes) => {
             // Get a clone of the post (to prevent re-fetching of data).
@@ -71,6 +70,26 @@ export default {
           });
         }
       });
+    },
+    getPage(pageNum) {
+      this.posts = [];
+
+      // Clear the persistant data.
+      this.$store.topPosts = [];
+      this.topPosts = [];
+
+      const top = pageNum * this.postsLimit;
+      for (let i = (pageNum - 1) * this.postsLimit; i < top; i += 1) {
+        const postUri = `${baseURL}/v0/item/${this.postIds[i]}.json`;
+
+        this.axios.get(postUri).then((postRes) => {
+          this.topPosts.push({ ...postRes.data });
+
+          this.posts.push(postRes.data);
+        });
+      }
+
+      this.page = pageNum;
     },
     reload() {
       // Used for debugging.

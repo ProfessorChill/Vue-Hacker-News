@@ -1,25 +1,29 @@
 <template>
   <div class="container news-list">
+    <div class="news-list-nav">
+      <a v-on:click="getPage(page - 1)" href="#"
+         v-if="this.page - 1 > 0">&lt; prev</a>
+      <a class="disabled" v-if="this.page - 1 < 1">&lt; prev</a>
+      <span>{{ this.page }} / {{ Math.ceil(this.newPostIds.length / this.postsLimit) }}</span>
+      <a v-on:click="getPage(page + 1)" href="#">more &gt;</a>
+    </div>
+
     <ul>
-      <li v-for="post in posts" class="news-item" :key="post.id">
-        <span class="score">{{ post.score }}</span>
-        <span class="title">
-          <a :href="post.url" target="_blank">{{ post.title }}</a>
-        </span>
-        <br/>
-        <span class="meta">
-          <span class="by">
-            by
-            <a class="" :href="'/user/' + post.by">{{ post.by }}</a>
-             | {{ post.descendants }} comments
-          </span>
-        </span>
-      </li>
+      <Post v-for="post in posts"
+        :score="post.score"
+        :title="post.title"
+        :url="post.url"
+        :by="post.by"
+        :descendants="post.descendants"
+        :key="post.id" />
     </ul>
+    <button @click="reload">Reset</button><br/>
   </div>
 </template>
 
 <script>
+import Post from './Post.vue';
+
 const baseURL = 'https://hacker-news.firebaseio.com';
 const postsLimit = 15;
 
@@ -27,13 +31,21 @@ export default {
   data() {
     return {
       posts: [],
+      postIds: [],
+      page: this.$route.params.pageNum ? Number(this.$route.params.pageNum) : 1,
+      postsLimit,
     };
+  },
+  components: {
+    Post,
   },
   created() {
     if (this.newPosts.length < postsLimit) {
+      this.$store.clearAll();
       this.fetchPosts();
     } else {
       this.posts = this.newPosts;
+      this.postIds = this.newPostIds;
     }
   },
   methods: {
@@ -41,6 +53,11 @@ export default {
       const uri = `${baseURL}/v0/newstories.json?print=pretty`;
 
       this.axios.get(uri).then((response) => {
+        for (let i = 0; i < response.data.length; i += 1) {
+          this.newPostIds.push(response.data[i]);
+        }
+        this.postIds = this.newPostIds;
+
         for (let i = 0; i < postsLimit; i += 1) {
           const postUri = `${baseURL}/v0/item/${response.data[i]}.json?print=pretty`;
 
@@ -53,6 +70,32 @@ export default {
           });
         }
       });
+    },
+    getPage(pageNum) {
+      this.posts = [];
+
+      // Clear the persistant data.
+      this.$store.newPosts = [];
+      this.newPosts = [];
+
+      const top = pageNum * this.postsLimit;
+      for (let i = (pageNum - 1) * this.postsLimit; i < top; i += 1) {
+        const postUri = `${baseURL}/v0/item/${this.postIds[i]}.json`;
+
+        this.axios.get(postUri).then((postRes) => {
+          this.newPosts.push({ ...postRes.data });
+
+          this.posts.push(postRes.data);
+        });
+      }
+
+      this.page = pageNum;
+    },
+    reload() {
+      // Used for debugging.
+      this.$store.clearAll();
+
+      window.location.reload();
     },
   },
 };
@@ -98,6 +141,15 @@ a {
     list-style-type: none;
     margin: 0;
     padding: 0;
+  }
+}
+
+.news-list-nav {
+  padding: 15px 30px;
+  text-align: center;
+
+  a {
+    margin: 0 1em;
   }
 }
 </style>
